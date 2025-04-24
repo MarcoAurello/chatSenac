@@ -6,7 +6,7 @@ from langchain_community.vectorstores.faiss import FAISS
 from langchain.chains.conversational_retrieval.base import ConversationalRetrievalChain
 from langchain_openai.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
-
+import random
 import streamlit as st
 from dotenv import load_dotenv, find_dotenv
 
@@ -16,9 +16,7 @@ _ = load_dotenv(find_dotenv())
 # 📁 Diretório onde os PDFs serão armazenados
 folder_files = Path(__file__).parent / "files"
 model_name = "gpt-3.5-turbo-0125"
-
-# Ativar logs no console Streamlit (para debug)
-DEBUG = False
+DEBUG = False  # Ativa logs no console do Streamlit para debug
 
 # 📄 Carrega todos os documentos PDF da pasta
 def importar_documentos() -> list:
@@ -46,13 +44,40 @@ def dividir_documentos(documentos: list) -> list:
     return documentos_divididos
 
 # 🧠 Cria um banco vetorial FAISS com embeddings OpenAI
-def criar_vector_store(documentos):  # <-- aqui o nome está correto
+def criar_vector_store(documentos):
     embedding_model = OpenAIEmbeddings()
     vector_store = FAISS.from_documents(
-        documents=documentos,  # <-- aqui estava "documents", mudei para "documentos"
+        documents=documentos,
         embedding=embedding_model
     )
     return vector_store
+
+# 🎯 Gera perguntas de quiz com variação aleatória
+def gerar_perguntas_quiz(documentos, qtd_perguntas=5):
+    chat = ChatOpenAI(model=model_name)
+
+    random.shuffle(documentos)
+    trechos_selecionados = documentos[:min(5, len(documentos))]
+    texto_base = "\n".join([doc.page_content for doc in trechos_selecionados])
+
+    prompt = f"""
+    A partir do texto abaixo, gere {qtd_perguntas} perguntas de múltipla escolha com 4 alternativas cada.
+
+    Para cada pergunta, siga este formato:
+    Pergunta: [texto da pergunta]
+    A) [opção 1]
+    B) [opção 2]
+    C) [opção 3]
+    D) [opção 4]
+    Resposta: [letra da opção correta]
+    Explicação: [breve explicação de por que essa é a resposta correta]
+
+    Texto base:
+    {texto_base}
+    """
+
+    resposta = chat.invoke(prompt)
+    return resposta.content
 
 # 🤖 Cria a cadeia de conversa com memória e busca semântica
 def cria_chain_conversa():

@@ -1,6 +1,7 @@
 import streamlit as st
 import time
 from backend import cria_chain_conversa, folder_files
+from pathlib import Path
 
 # Configurações de página
 st.set_page_config(
@@ -10,9 +11,10 @@ st.set_page_config(
 )
 
 def chat_window():
-    st.markdown("## 🤖 Bem-vindo ao **Chat Senac PE**")
-    st.markdown("## Assistente de ensino")
-    st.markdown("## Redes de computadores e Cibersegurança")
+    st.markdown("## 🤖 **Assistente de ensino Senac PE**")
+    st.markdown("##  **Envie um Pdf**")
+    st.markdown(" **Tire duvidas no chat**")
+    st.markdown(" **Estude com o quiz**")
     st.markdown("---")
 
     if 'chain' not in st.session_state:
@@ -37,8 +39,82 @@ def chat_window():
             chain.invoke({"question": nova_mensagem})
             st.rerun()
 
+def display_existing_files(folder):
+    # Listar os arquivos presentes no diretório
+    arquivos = list(folder.glob("*.pdf"))
+    if arquivos:
+        st.markdown("### Arquivos já enviados:")
+        for arquivo in arquivos:
+            col1, col2 = st.columns([4, 1])  # Criar duas colunas, uma para o nome e outra para o botão
+            with col1:
+                st.markdown(f"- {arquivo.name}")
+            with col2:
+                # Adiciona um botão de exclusão ao lado do arquivo
+                if st.button(f"❌", key=arquivo.name):
+                    excluir_arquivo(arquivo)
+                    st.rerun()  # Atualiza a página após a exclusão
+    else:
+        st.warning("⚠️ Nenhum arquivo PDF encontrado.")
+
+# Função para excluir o arquivo
+def excluir_arquivo(arquivo):
+    try:
+        arquivo.unlink()  # Exclui o arquivo da pasta
+        st.success(f"✅ Arquivo {arquivo.name} excluído com sucesso!")
+    except Exception as e:
+        st.error(f"❌ Erro ao excluir o arquivo {arquivo.name}: {str(e)}")
+
+def quiz_window(perguntas_raw):
+    st.markdown("## 🧠 Quiz baseado nos PDFs enviados")
+
+    if "acertos" not in st.session_state:
+        st.session_state["acertos"] = 0
+
+    perguntas_brutas = perguntas_raw.strip().split("\n\nPergunta:")
+    if perguntas_brutas[0].startswith("Pergunta:"):
+        perguntas_brutas[0] = perguntas_brutas[0][len("Pergunta:"):]
+
+    for idx, pergunta_raw in enumerate(perguntas_brutas):
+        linhas = pergunta_raw.strip().split("\n")
+        pergunta_texto = linhas[0]
+        opcoes = linhas[1:5]
+        resposta_certa = linhas[5].split(":")[-1].strip()[0]
+        explicacao = linhas[6].split(":", 1)[-1].strip()
+
+        st.markdown(f"**Pergunta {idx + 1}:** {pergunta_texto}")
+        escolha = st.radio("Escolha uma opção:", opcoes, key=f"resposta_{idx}")
+
+        letra_escolhida = escolha[0]
+        correta = (letra_escolhida == resposta_certa)
+
+        if f"resposta_mostrada_{idx}" not in st.session_state:
+            st.session_state[f"resposta_mostrada_{idx}"] = False
+
+        if st.button(f"Ver resposta da Pergunta {idx + 1}", key=f"ver_resposta_{idx}"):
+            st.session_state[f"resposta_mostrada_{idx}"] = True
+            if correta:
+                st.session_state["acertos"] += 1
+
+        if st.session_state[f"resposta_mostrada_{idx}"]:
+            if correta:
+                st.success(f"✅ Resposta correta! {resposta_certa}) {opcoes[ord(resposta_certa) - ord('A')][3:].strip()}")
+            else:
+                st.error(f"❌ Resposta incorreta. A correta é **{resposta_certa}**) {opcoes[ord(resposta_certa) - ord('A')][3:].strip()}")
+            st.markdown(f"🧠 **Explicação:** {explicacao}")
+            st.markdown(f"________________________________")
+
+    if st.button("🔁 Refazer Quiz com PDFs", use_container_width=True, key="botao_quiz_refazer"):
+        st.session_state.pop("quiz", None)
+        from backend import importar_documentos, dividir_documentos, gerar_perguntas_quiz
+        documentos = importar_documentos()
+        documentos = dividir_documentos(documentos)
+        st.session_state["quiz"] = gerar_perguntas_quiz(documentos)
+        st.session_state["acertos"] = 0
+        st.rerun()
+
+    st.markdown(f"### 🎯 Total de acertos: {st.session_state['acertos']} de {len(perguntas_brutas)} perguntas.")
+
 def save_uploaded_files(uploaded_files, folder):
-    """Salva arquivos enviados na pasta especificada."""
     for file in folder.glob("*.pdf"):
         file.unlink()
     for file in uploaded_files:
@@ -46,22 +122,23 @@ def save_uploaded_files(uploaded_files, folder):
 
 def main():
     with st.sidebar:
-        # st.markdown("## 📂 Upload de PDFs")
-        # uploaded_pdfs = st.file_uploader(
-        #     "Adicione um ou mais arquivos PDF:",
-        #     type="pdf",
-        #     accept_multiple_files=True,
-        #     help="Você pode adicionar vários arquivos ao mesmo tempo."
-        # )
+        st.markdown("## 📂 Upload de PDFs")
+        display_existing_files(folder_files)
+        uploaded_pdfs = st.file_uploader(
+            "Adicione um ou mais arquivos PDF:",
+            type="pdf",
+            accept_multiple_files=True,
+            help="Você pode adicionar vários arquivos ao mesmo tempo."
+        )
 
-        # if uploaded_pdfs:
-        #     save_uploaded_files(uploaded_pdfs, folder_files)
-        #     st.success(f"✅ {len(uploaded_pdfs)} arquivo(s) salvo(s) com sucesso!")
+        if uploaded_pdfs:
+            save_uploaded_files(uploaded_pdfs, folder_files)
+            st.success(f"✅ {len(uploaded_pdfs)} arquivo(s) salvo(s) com sucesso!")
 
         st.markdown("---")
         label_botao = "▶️ Inicializar Chatbot" if "chain" not in st.session_state else "🔄 Atualizar Chatbot"
 
-        if st.button(label_botao, use_container_width=True):
+        if st.button(label_botao, use_container_width=True, key="botao_inicializar"):
             if len(list(folder_files.glob("*.pdf"))) == 0:
                 st.error("⚠️ Adicione arquivos PDF antes de inicializar o chatbot.")
             else:
@@ -69,7 +146,20 @@ def main():
                 cria_chain_conversa()
                 st.rerun()
 
-    chat_window()
+        # Aqui mantemos o "botao_quiz" no sidebar
+        if st.button("🧪 Gerar Quiz com PDFs", use_container_width=True, key="botao_quiz"):
+            from backend import importar_documentos, dividir_documentos, gerar_perguntas_quiz
+            documentos = importar_documentos()
+            documentos = dividir_documentos(documentos)
+            st.session_state["quiz"] = gerar_perguntas_quiz(documentos)
+            st.session_state["acertos"] = 0
+            st.session_state["quiz_index"] = 0
+            st.rerun()
+
+    if "quiz" in st.session_state:
+        quiz_window(st.session_state["quiz"])
+    else:
+        chat_window()
 
 if __name__ == "__main__":
     main()
