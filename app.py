@@ -76,15 +76,21 @@ def quiz_window(perguntas_raw):
 
     for idx, pergunta_raw in enumerate(perguntas_brutas):
         linhas = pergunta_raw.strip().split("\n")
+
+        if len(linhas) < 7:
+            st.warning(f"⚠️ Pergunta {idx + 1} mal formatada ou incompleta. Pulando...")
+            continue
+
         pergunta_texto = linhas[0]
         opcoes = linhas[1:5]
-        resposta_certa = linhas[5].split(":")[-1].strip()[0]
+        resposta_certa = linhas[5].split(":")[-1].strip().upper()[0]  # <-- alteração aqui
+
         explicacao = linhas[6].split(":", 1)[-1].strip()
 
         st.markdown(f"**Pergunta {idx + 1}:** {pergunta_texto}")
         escolha = st.radio("Escolha uma opção:", opcoes, key=f"resposta_{idx}")
 
-        letra_escolhida = escolha[0]
+        letra_escolhida = escolha[0].upper()
         correta = (letra_escolhida == resposta_certa)
 
         if f"resposta_mostrada_{idx}" not in st.session_state:
@@ -96,12 +102,18 @@ def quiz_window(perguntas_raw):
                 st.session_state["acertos"] += 1
 
         if st.session_state[f"resposta_mostrada_{idx}"]:
-            if correta:
-                st.success(f"✅ Resposta correta! {resposta_certa}) {opcoes[ord(resposta_certa) - ord('A')][3:].strip()}")
+            index_resposta_certa = ord(resposta_certa) - ord("A")
+            if 0 <= index_resposta_certa < len(opcoes):
+                texto_resposta = opcoes[index_resposta_certa][3:].strip()
             else:
-                st.error(f"❌ Resposta incorreta. A correta é **{resposta_certa}**) {opcoes[ord(resposta_certa) - ord('A')][3:].strip()}")
+                texto_resposta = "opção desconhecida"
+
+            if correta:
+                st.success(f"✅ Resposta correta! {resposta_certa}) {texto_resposta}")
+            else:
+                st.error(f"❌ Resposta incorreta. A correta é **{resposta_certa}**) {texto_resposta}")
             st.markdown(f"🧠 **Explicação:** {explicacao}")
-            st.markdown(f"________________________________")
+            st.markdown("________________________________")
 
     if st.button("🔁 Refazer Quiz com PDFs", use_container_width=True, key="botao_quiz_refazer"):
         st.session_state.pop("quiz", None)
@@ -113,6 +125,7 @@ def quiz_window(perguntas_raw):
         st.rerun()
 
     st.markdown(f"### 🎯 Total de acertos: {st.session_state['acertos']} de {len(perguntas_brutas)} perguntas.")
+
 
 def save_uploaded_files(uploaded_files, folder):
     for file in folder.glob("*.pdf"):
