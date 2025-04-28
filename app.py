@@ -203,7 +203,7 @@ def main():
     <style>
         .orange-button {
             background-color: orange;
-            color: black;
+            color: black !important;
             border: none;
             padding: 10px 20px;
             font-size: 16px;
@@ -211,20 +211,29 @@ def main():
             border-radius: 5px;
             text-align: center;
             display: inline-block;
-            text-decoration: none;
+            text-decoration: none !important;
+            font-family: inherit;
         }
         .orange-button:hover {
             background-color: darkorange;
+            text-decoration: none !important;
+        }
+        .orange-button:visited {
+            color: black !important;
+            text-decoration: none !important;
+        }
+        .orange-button:active {
+            background-color: orangered;
+            text-decoration: none !important;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# Criando o link estilizado como um botão
+# Criando o link estilizado como botão
     st.markdown(
     '<a class="orange-button" href="https://docs.google.com/forms/d/e/1FAIpQLSd7IhxE0Q5kmX4TF9m1LIpswwqhD6IAXYaAPP49p7tE26CVxw/viewform?usp=dialog" target="_self">👤 Após testar o chat e o quiz responda a pesquisa do usuário</a>',
     unsafe_allow_html=True
-)
-
+    )
 
 
     
