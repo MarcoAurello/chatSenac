@@ -25,10 +25,12 @@ DEBUG = False  # Ativa logs no console do Streamlit para debug
 # 📄 Função para importar documentos
 def importar_documentos() -> list:
     documentos = []
-    for arquivo in folder_files.glob("*.pdf"):
-        if DEBUG: st.write(f"🔍 Carregando {arquivo.name}")
-        loader = PyPDFLoader(arquivo)
+    session_id = st.session_state.get("session_id", "")
+
+    for arquivo in folder_files.glob(f"*_{session_id}.pdf"):
+        loader = PyPDFLoader(str(arquivo))
         documentos.extend(loader.load())
+
     return documentos
 
 # ✂️ Função para dividir documentos

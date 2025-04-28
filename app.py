@@ -2,6 +2,8 @@ import streamlit as st
 import time
 from backend import cria_chain_conversa, folder_files
 from pathlib import Path
+import uuid
+import random
 
 # Configurações de página
 st.set_page_config(
@@ -58,19 +60,26 @@ def chat_window():
             st.rerun()
 
 def display_existing_files(folder):
-    arquivos = list(folder.glob("*.pdf"))
+    session_id = st.session_state.get("session_id", "")
+
+    # Só pega os PDFs da sessão atual
+    arquivos = list(folder.glob(f"*_{session_id}.pdf"))
+
     if arquivos:
         st.markdown("### Arquivos já enviados:")
         for arquivo in arquivos:
             col1, col2 = st.columns([4, 1])
             with col1:
-                st.markdown(f"- {arquivo.name}")
+                # Remove o session_id do nome exibido
+                nome_original = arquivo.name.replace(f"_{session_id}", "")
+                st.markdown(f"- {nome_original}")
             with col2:
                 if st.button(f"❌", key=arquivo.name):
                     excluir_arquivo(arquivo)
                     st.rerun()
     else:
         st.warning("⚠️ Insira PDFs das aulas e clique em inicializar chat.")
+
 
 def excluir_arquivo(arquivo):
     try:
@@ -142,12 +151,20 @@ def quiz_window(perguntas_raw):
     st.markdown(f"### 🎯 Total de acertos: {st.session_state['acertos']} de {len(perguntas_brutas)} perguntas.")
 
 def save_uploaded_files(uploaded_files, folder):
-    for file in folder.glob("*.pdf"):
+    # Apaga arquivos antigos da sessão
+    for file in folder.glob(f"*_{st.session_state['session_id']}.pdf"):
         file.unlink()
+
+    # Salva novos arquivos com o ID da sessão
     for file in uploaded_files:
-        (folder / file.name).write_bytes(file.read())
+        filename = file.name.replace(".pdf", f"_{st.session_state['session_id']}.pdf")
+        (folder / filename).write_bytes(file.read())
+
 
 def main():
+    if "session_id" not in st.session_state:
+        st.session_state["session_id"] = str(random.randint(100000, 999999))
+
     with st.sidebar:
         st.image("pdfs/logomarca.png", width=200)
         
