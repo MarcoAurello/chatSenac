@@ -8,8 +8,10 @@ from langchain_openai.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 import random
 import streamlit as st
-import os
 from dotenv import load_dotenv, find_dotenv
+from langchain.chains.summarize import load_summarize_chain
+
+# from video_processor import carregar_videos_transcritos
 
 # 🔐 Carrega variáveis de ambiente
 _ = load_dotenv(find_dotenv())
@@ -27,6 +29,8 @@ def importar_documentos() -> list:
         loader = PyPDFLoader(arquivo)
         documentos_arquivo = loader.load()
         documentos.extend(documentos_arquivo)
+
+        
     return documentos
 
 # ✂️ Divide documentos em pedaços menores com sobreposição
@@ -46,7 +50,7 @@ def dividir_documentos(documentos: list) -> list:
 
 # 🧠 Cria um banco vetorial FAISS com embeddings OpenAI
 def criar_vector_store(documentos):
-    embedding_model = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
+    embedding_model = OpenAIEmbeddings()
     vector_store = FAISS.from_documents(
         documents=documentos,
         embedding=embedding_model
@@ -54,11 +58,11 @@ def criar_vector_store(documentos):
     return vector_store
 
 # 🎯 Gera perguntas de quiz com variação aleatória
-def gerar_perguntas_quiz(documentos, qtd_perguntas=10):
+def gerar_perguntas_quiz(documentos, qtd_perguntas=5):
     chat = ChatOpenAI(model=model_name)
 
     random.shuffle(documentos)
-    trechos_selecionados = documentos[:min(10, len(documentos))]
+    trechos_selecionados = documentos[:min(5, len(documentos))]
     texto_base = "\n".join([doc.page_content for doc in trechos_selecionados])
 
     prompt = f"""
@@ -79,6 +83,14 @@ def gerar_perguntas_quiz(documentos, qtd_perguntas=10):
 
     resposta = chat.invoke(prompt)
     return resposta.content
+
+def resumir_documentos(documentos):
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+    texts = text_splitter.split_documents(documentos)
+
+    chain = load_summarize_chain(llm= model_name, chain_type="stuff")  # Substitua LLM_MODEL pelo seu modelo atual
+    resumo = chain.run(texts)
+    return resumo
 
 # 🤖 Cria a cadeia de conversa com memória e busca semântica
 def cria_chain_conversa():

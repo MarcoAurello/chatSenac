@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from backend import cria_chain_conversa, folder_files
+from backend import cria_chain_conversa, folder_files , resumir_documentos
 from pathlib import Path
 
 # Configurações de página
@@ -10,33 +10,15 @@ st.set_page_config(
     layout="centered"
 )
 
-# Adicionando estilo CSS
-st.markdown("""
-    <style>
-     
-        .stButton>button {
-            background-color: #0056b3; /* Cor do botão azul */
-            color: white;
-            border: none;
-            border-radius: 5px;
-            padding: 10px;
-            font-size: 16px;
-        }
-        .stButton>button:hover {
-            background-color: #004085; /* Cor do botão ao passar o mouse */
-        }
-    </style>
-""", unsafe_allow_html=True)
-
 def chat_window():
-    st.markdown("## 🤖 **Assistente de ensino**")
-   
-    st.markdown(" **Insira PDFs, Estude com o chat, Teste seus conhecimentos no quiz **")
-    
+    st.markdown("## 🤖 **Assistente de ensino Senac PE**")
+    st.markdown("##  **Envie um Pdf**")
+    st.markdown(" **Tire duvidas no chat**")
+    st.markdown(" **Estude com o quiz**")
     st.markdown("---")
 
     if 'chain' not in st.session_state:
-        st.warning("📄Insira Pdfs das aulas e clique em inicializar Chat.")
+        st.warning("📄 Clique em inicializar Chat.")
         st.stop()
 
     chain = st.session_state["chain"]
@@ -58,23 +40,26 @@ def chat_window():
             st.rerun()
 
 def display_existing_files(folder):
+    # Listar os arquivos presentes no diretório
     arquivos = list(folder.glob("*.pdf"))
     if arquivos:
         st.markdown("### Arquivos já enviados:")
         for arquivo in arquivos:
-            col1, col2 = st.columns([4, 1])
+            col1, col2 = st.columns([4, 1])  # Criar duas colunas, uma para o nome e outra para o botão
             with col1:
                 st.markdown(f"- {arquivo.name}")
             with col2:
+                # Adiciona um botão de exclusão ao lado do arquivo
                 if st.button(f"❌", key=arquivo.name):
                     excluir_arquivo(arquivo)
-                    st.rerun()
+                    st.rerun()  # Atualiza a página após a exclusão
     else:
-        st.warning("⚠️ Insira PDFs das aulas e clique em inicializar chat.")
+        st.warning("⚠️ Nenhum arquivo PDF encontrado.")
 
+# Função para excluir o arquivo
 def excluir_arquivo(arquivo):
     try:
-        arquivo.unlink()
+        arquivo.unlink()  # Exclui o arquivo da pasta
         st.success(f"✅ Arquivo {arquivo.name} excluído com sucesso!")
     except Exception as e:
         st.error(f"❌ Erro ao excluir o arquivo {arquivo.name}: {str(e)}")
@@ -98,7 +83,7 @@ def quiz_window(perguntas_raw):
 
         pergunta_texto = linhas[0]
         opcoes = linhas[1:5]
-        resposta_certa = linhas[5].split(":")[-1].strip().upper()[0]
+        resposta_certa = linhas[5].split(":")[-1].strip().upper()[0]  # <-- alteração aqui
 
         explicacao = linhas[6].split(":", 1)[-1].strip()
 
@@ -141,6 +126,7 @@ def quiz_window(perguntas_raw):
 
     st.markdown(f"### 🎯 Total de acertos: {st.session_state['acertos']} de {len(perguntas_brutas)} perguntas.")
 
+
 def save_uploaded_files(uploaded_files, folder):
     for file in folder.glob("*.pdf"):
         file.unlink()
@@ -149,34 +135,7 @@ def save_uploaded_files(uploaded_files, folder):
 
 def main():
     with st.sidebar:
-        st.image("pdfs/logomarca.png", width=200)
-        
-        label_botao = "▶️ Inicializar Chatbot" if "chain" not in st.session_state else "🔄 Atualizar Chatbot"
-
-        
-        
-
-        with st.container():  # Aplicando o fundo azul aos botões
-            st.markdown('<div class="bot-container">', unsafe_allow_html=True)
-            if st.button(label_botao, use_container_width=True, key="botao_inicializar"):
-                if len(list(folder_files.glob("*.pdf"))) == 0:
-                    st.error("⚠️ Adicione arquivos PDF antes de inicializar o chatbot.")
-                else:
-                    st.info("🔧 Inicializando o Chatbot...")
-                    cria_chain_conversa()
-                    st.rerun()
-
-            if st.button("🧪 Gerar quiz para testar seu conhecimento", use_container_width=True, key="botao_quiz"):
-                from backend import importar_documentos, dividir_documentos, gerar_perguntas_quiz
-                documentos = importar_documentos()
-                documentos = dividir_documentos(documentos)
-                st.session_state["quiz"] = gerar_perguntas_quiz(documentos)
-                st.session_state["acertos"] = 0
-                st.session_state["quiz_index"] = 0
-                st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        st.markdown("## 📂 Upload de PDFs")
+        st.markdown("## ")
         display_existing_files(folder_files)
         uploaded_pdfs = st.file_uploader(
             "Adicione um ou mais arquivos PDF:",
@@ -185,58 +144,30 @@ def main():
             help="Você pode adicionar vários arquivos ao mesmo tempo."
         )
 
-       
         if uploaded_pdfs:
             save_uploaded_files(uploaded_pdfs, folder_files)
             st.success(f"✅ {len(uploaded_pdfs)} arquivo(s) salvo(s) com sucesso!")
 
+        st.markdown("---")
+        label_botao = "▶️ Inicializar Chatbot" if "chain" not in st.session_state else "🔄 Atualizar Chatbot"
 
-   # st.button("👤 Após testar o chat e o quiz responda a pesquisa do usuário", 
-    #      on_click=lambda: st.write("Redirecionando para www.senac.br"))
+        if st.button(label_botao, use_container_width=True, key="botao_inicializar"):
+            if len(list(folder_files.glob("*.pdf"))) == 0:
+                st.error("⚠️ Adicione arquivos PDF antes de inicializar o chatbot.")
+            else:
+                st.info("🔧 Inicializando o Chatbot...")
+                cria_chain_conversa()
+                st.rerun()
 
-    
-
-
-
-# Estilizando o botão com CSS
-    st.markdown("""
-    <style>
-        .orange-button {
-            background-color: orange;
-            color: black;
-            border: none;
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            border-radius: 5px;
-            text-align: center;
-            display: inline-block;
-            text-decoration: none;
-        }
-        .orange-button:hover {
-            background-color: darkorange;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-# Criando o link estilizado como um botão
-    st.markdown(
-    '<a class="orange-button" href="https://docs.google.com/forms/d/e/1FAIpQLSd7IhxE0Q5kmX4TF9m1LIpswwqhD6IAXYaAPP49p7tE26CVxw/viewform?usp=dialog" target="_self">👤 Após testar o chat e o quiz responda a pesquisa do usuário</a>',
-    unsafe_allow_html=True
-)
-
-
-
-    
-
-
-    
-
-
-   
-
-    
-        
+        # Aqui mantemos o "botao_quiz" no sidebar
+        if st.button("🧪 Gerar Quiz com PDFs", use_container_width=True, key="botao_quiz"):
+            from backend import importar_documentos, dividir_documentos, gerar_perguntas_quiz
+            documentos = importar_documentos()
+            documentos = dividir_documentos(documentos)
+            st.session_state["quiz"] = gerar_perguntas_quiz(documentos)
+            st.session_state["acertos"] = 0
+            st.session_state["quiz_index"] = 0
+            st.rerun()
 
     if "quiz" in st.session_state:
         quiz_window(st.session_state["quiz"])
