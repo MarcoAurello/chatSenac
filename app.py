@@ -278,17 +278,30 @@ def main():
 
                             
         resposta = st.radio(
-    "Caso não tenha documento para inserir, pode testar uma aula de leitura dinâmica?",
-    ["Não", "Sim"],
+    "Caso Não tenha material para upload agora, selecione uma aula para testar a aplicação",
+    ["Vou enviar um material", "Aula de leitura dinâmica","Aula de Marketing de vendas"],
     index=0
     )
 
-    if resposta == "Sim":
+    if resposta == "Aula de leitura dinâmica":
             from shutil import copyfile
 
             session_id = st.session_state["session_id"]
             origem = Path("files/LIVRO LEITURA DINÂMICA_617127.pdf")
             destino = folder_files / f"LIVRO LEITURA DINÂMICA_{session_id}.pdf"
+
+            if not destino.exists():  # Evita duplicação
+                copyfile(origem, destino)
+                st.success("✅ Arquivo de exemplo carregado com sucesso!")
+                st.rerun()
+
+
+    if resposta == "Aula de Marketing de vendas":
+            from shutil import copyfile
+
+            session_id = st.session_state["session_id"]
+            origem = Path("files/5ca0e9_424413178c6f4e218770dc8a08208fef_826388.pdf")
+            destino = folder_files / f"5ca0e9_424413178c6f4e218770dc8a08208fef_{session_id}.pdf"
 
             if not destino.exists():  # Evita duplicação
                 copyfile(origem, destino)
