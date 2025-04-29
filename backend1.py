@@ -1,17 +1,18 @@
 from pathlib import Path
+import random
+import os
+
+import streamlit as st
+from dotenv import load_dotenv, find_dotenv
+
 from langchain_community.document_loaders.pdf import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores.faiss import FAISS
-from langchain.chains.conversational_retrieval.base import ConversationalRetrievalChain
 from langchain_openai.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
-import random
-import streamlit as st
-from dotenv import load_dotenv, find_dotenv
-from langchain.chains.summarize import load_summarize_chain
-
-# from video_processor import carregar_videos_transcritos
+from langchain.prompts import PromptTemplate
+from langchain.chains.conversational_retrieval.base import ConversationalRetrievalChain
 
 # 🔐 Carrega variáveis de ambiente
 _ = load_dotenv(find_dotenv())
@@ -21,19 +22,18 @@ folder_files = Path(__file__).parent / "files"
 model_name = "gpt-3.5-turbo-0125"
 DEBUG = False  # Ativa logs no console do Streamlit para debug
 
-# 📄 Carrega todos os documentos PDF da pasta
+# 📄 Função para importar documentos
 def importar_documentos() -> list:
     documentos = []
-    for arquivo in folder_files.glob("*.pdf"):
-        if DEBUG: st.write(f"🔍 Carregando {arquivo.name}")
-        loader = PyPDFLoader(arquivo)
-        documentos_arquivo = loader.load()
-        documentos.extend(documentos_arquivo)
+    session_id = st.session_state.get("session_id", "")
 
-        
+    for arquivo in folder_files.glob(f"*_{session_id}.pdf"):
+        loader = PyPDFLoader(str(arquivo))
+        documentos.extend(loader.load())
+
     return documentos
 
-# ✂️ Divide documentos em pedaços menores com sobreposição
+# ✂️ Função para dividir documentos
 def dividir_documentos(documentos: list) -> list:
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
@@ -48,21 +48,38 @@ def dividir_documentos(documentos: list) -> list:
 
     return documentos_divididos
 
-# 🧠 Cria um banco vetorial FAISS com embeddings OpenAI
+# 🧠 Cria o vector store (FAISS)
 def criar_vector_store(documentos):
-    embedding_model = OpenAIEmbeddings()
-    vector_store = FAISS.from_documents(
-        documents=documentos,
-        embedding=embedding_model
-    )
+    if not documentos:
+        st.error("❌ Nenhum documento foi fornecido para criar o vetor store.")
+        return None
+
+    # Verificação opcional: garantir que todos os documentos têm conteúdo textual
+    for i, doc in enumerate(documentos):
+        if not hasattr(doc, 'page_content') and not hasattr(doc, 'text'):
+            st.error(f"❌ Documento na posição {i} não possui texto válido.")
+            return None
+
+    embedding_model = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
+
+    # Criação segura do vector store
+    try:
+        vector_store = FAISS.from_documents(
+            documents=documentos,
+            embedding=embedding_model
+        )
+    except IndexError as e:
+        st.error("❌ Erro ao criar o índice FAISS. Verifique se os documentos têm conteúdo válido.")
+        return None
+
     return vector_store
 
-# 🎯 Gera perguntas de quiz com variação aleatória
-def gerar_perguntas_quiz(documentos, qtd_perguntas=5):
-    chat = ChatOpenAI(model=model_name)
 
+# 🎯 Gera perguntas de quiz (não alterado)
+def gerar_perguntas_quiz(documentos, qtd_perguntas=10):
+    chat = ChatOpenAI(model=model_name)
     random.shuffle(documentos)
-    trechos_selecionados = documentos[:min(5, len(documentos))]
+    trechos_selecionados = documentos[:min(qtd_perguntas, len(documentos))]
     texto_base = "\n".join([doc.page_content for doc in trechos_selecionados])
 
     prompt = f"""
@@ -84,19 +101,66 @@ def gerar_perguntas_quiz(documentos, qtd_perguntas=5):
     resposta = chat.invoke(prompt)
     return resposta.content
 
-def resumir_documentos(documentos):
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-    texts = text_splitter.split_documents(documentos)
+# 🔥 Função para gerar o prompt dinamicamente
+def gerar_prompt_dinamico():
+    # 30% de chance de fazer uma pergunta reflexiva
+    fazer_reflexao = random.random() < 0.3
 
-    chain = load_summarize_chain(llm= model_name, chain_type="stuff")  # Substitua LLM_MODEL pelo seu modelo atual
-    resumo = chain.run(texts)
-    return resumo
+    # Forçar reflexão após 3 interações sem reflexão
+    if st.session_state.interacoes_sem_reflexao >= 3:
+        fazer_reflexao = True
 
-# 🤖 Cria a cadeia de conversa com memória e busca semântica
+    base_prompt = """
+Você é um tutor paciente conversando com um aluno.
+
+Use o seguinte conteúdo dos documentos para responder:
+{context}
+
+Baseado nisso, e no histórico de conversa:
+{chat_history}
+
+E na nova pergunta:
+{question}
+
+Responda de maneira clara, didática e amigável.
+"""
+
+    if fazer_reflexao:
+        base_prompt += """
+Depois de responder, estimule o aluno a refletir com uma pergunta aberta como:
+- "O que você acha sobre isso?"
+- "Por que você acredita que isso acontece?"
+- "Você conseguiria pensar em um exemplo onde isso se aplica?"
+"""
+        # Resetar contador
+        st.session_state.interacoes_sem_reflexao = 0
+    else:
+        # Aumenta contador
+        st.session_state.interacoes_sem_reflexao += 1
+
+    base_prompt += """
+Agora responda:
+"""
+
+    return PromptTemplate(
+        input_variables=["chat_history", "question", "context"],
+        template=base_prompt
+    )
+
+# 🚀 Função principal para criar o chain
 def cria_chain_conversa():
     documentos = importar_documentos()
+
+    if not documentos:
+        st.session_state.erro_chat = "❌ Nenhum arquivo encontrado para inicializar o chat. Por favor, carregue um arquivo PDF."
+        return None
+
     documentos = dividir_documentos(documentos)
     vector_store = criar_vector_store(documentos)
+
+    if vector_store is None:
+        st.session_state.erro_chat = "❌ Não foi possível criar o vector store. Verifique os documentos."
+        return None
 
     chat_model = ChatOpenAI(model=model_name)
 
@@ -106,15 +170,49 @@ def cria_chain_conversa():
         output_key="answer"
     )
 
-    retriever = vector_store.as_retriever()
+    try:
+        retriever = vector_store.as_retriever()
+    except AttributeError:
+        st.session_state.erro_chat = "❌ O vector store não possui o método 'as_retriever'. Verifique a criação do vector store."
+        return None
 
+    # Limpa mensagens de erro anteriores, se houve sucesso até aqui
+    st.session_state.pop("erro_chat", None)
+
+    # Inicializa contadores de interação
+    if "num_interacoes" not in st.session_state:
+        st.session_state.num_interacoes = 0
+    if "interacoes_sem_reflexao" not in st.session_state:
+        st.session_state.interacoes_sem_reflexao = 0
+
+    # Gera o prompt dinâmico inicial
+    prompt_template = gerar_prompt_dinamico()
+
+    # Cria o chain com prompt personalizado
     chain = ConversationalRetrievalChain.from_llm(
         llm=chat_model,
         memory=memory,
         retriever=retriever,
         return_source_documents=True,
+        combine_docs_chain_kwargs={"prompt": prompt_template},
         verbose=DEBUG
     )
 
     st.session_state["chain"] = chain
+
     return chain
+
+# 🗨️ Função para interagir com o usuário (com atualização dinâmica do prompt)
+def responder_usuario(pergunta_usuario):
+    # Gera novo prompt dinâmico a cada interação
+    prompt_template = gerar_prompt_dinamico()
+
+    # Atualiza o prompt do chain em runtime
+    st.session_state["chain"].combine_docs_chain.llm_chain.prompt = prompt_template
+
+    resposta = st.session_state["chain"].invoke({"question": pergunta_usuario})
+
+    # Atualiza contador total de interações
+    st.session_state.num_interacoes += 1
+
+    return resposta["answer"]

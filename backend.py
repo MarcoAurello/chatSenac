@@ -50,12 +50,30 @@ def dividir_documentos(documentos: list) -> list:
 
 # 🧠 Cria o vector store (FAISS)
 def criar_vector_store(documentos):
+    if not documentos:
+        st.error("❌ Nenhum documento foi fornecido para criar o vetor store.")
+        return None
+
+    # Verificação opcional: garantir que todos os documentos têm conteúdo textual
+    for i, doc in enumerate(documentos):
+        if not hasattr(doc, 'page_content') and not hasattr(doc, 'text'):
+            st.error(f"❌ Documento na posição {i} não possui texto válido.")
+            return None
+
     embedding_model = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
-    vector_store = FAISS.from_documents(
-        documents=documentos,
-        embedding=embedding_model
-    )
+
+    # Criação segura do vector store
+    try:
+        vector_store = FAISS.from_documents(
+            documents=documentos,
+            embedding=embedding_model
+        )
+    except IndexError as e:
+        st.error("❌ Erro ao criar o índice FAISS. Verifique se os documentos têm conteúdo válido.")
+        return None
+
     return vector_store
+
 
 # 🎯 Gera perguntas de quiz (não alterado)
 def gerar_perguntas_quiz(documentos, qtd_perguntas=10):
@@ -104,7 +122,7 @@ Baseado nisso, e no histórico de conversa:
 E na nova pergunta:
 {question}
 
-Responda de maneira clara, didática e amigável.
+Responda de maneira clara, didática e amigável, trazendo exemplos e fazendo comparações para ajudar no entendimento.
 """
 
     if fazer_reflexao:
@@ -132,8 +150,17 @@ Agora responda:
 # 🚀 Função principal para criar o chain
 def cria_chain_conversa():
     documentos = importar_documentos()
+
+    if not documentos:
+        st.session_state.erro_chat = "❌ Nenhum arquivo encontrado para inicializar o chat. Por favor, carregue um arquivo PDF."
+        return None
+
     documentos = dividir_documentos(documentos)
     vector_store = criar_vector_store(documentos)
+
+    if vector_store is None:
+        st.session_state.erro_chat = "❌ Não foi possível criar o vector store. Verifique os documentos."
+        return None
 
     chat_model = ChatOpenAI(model=model_name)
 
@@ -143,7 +170,14 @@ def cria_chain_conversa():
         output_key="answer"
     )
 
-    retriever = vector_store.as_retriever()
+    try:
+        retriever = vector_store.as_retriever()
+    except AttributeError:
+        st.session_state.erro_chat = "❌ O vector store não possui o método 'as_retriever'. Verifique a criação do vector store."
+        return None
+
+    # Limpa mensagens de erro anteriores, se houve sucesso até aqui
+    st.session_state.pop("erro_chat", None)
 
     # Inicializa contadores de interação
     if "num_interacoes" not in st.session_state:
@@ -151,12 +185,16 @@ def cria_chain_conversa():
     if "interacoes_sem_reflexao" not in st.session_state:
         st.session_state.interacoes_sem_reflexao = 0
 
-    # Cria o chain (sem prompt fixo ainda)
+    # Gera o prompt dinâmico inicial
+    prompt_template = gerar_prompt_dinamico()
+
+    # Cria o chain com prompt personalizado
     chain = ConversationalRetrievalChain.from_llm(
         llm=chat_model,
         memory=memory,
         retriever=retriever,
         return_source_documents=True,
+        combine_docs_chain_kwargs={"prompt": prompt_template},
         verbose=DEBUG
     )
 
