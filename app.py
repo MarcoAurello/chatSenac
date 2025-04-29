@@ -275,6 +275,26 @@ def main():
         else:
             st.info("📄 Nenhum PDF encontrado. Faça upload para habilitar o chat e o quiz")
 
+
+                            
+        resposta = st.radio(
+    "Caso não tenha documento para inserir, pode testar uma aula de leitura dinâmica?",
+    ["Não", "Sim"],
+    index=0
+    )
+
+    if resposta == "Sim":
+            from shutil import copyfile
+
+            session_id = st.session_state["session_id"]
+            origem = Path("files/LIVRO LEITURA DINÂMICA_617127.pdf")
+            destino = folder_files / f"LIVRO LEITURA DINÂMICA_{session_id}.pdf"
+
+            if not destino.exists():  # Evita duplicação
+                copyfile(origem, destino)
+                st.success("✅ Arquivo de exemplo carregado com sucesso!")
+                st.rerun()
+
     # Botão para pesquisa de usuário
     st.markdown("""
         <style>
