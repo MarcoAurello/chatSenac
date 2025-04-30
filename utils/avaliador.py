@@ -20,6 +20,8 @@ def analisar_desempenho_ia(respostas_usuario):
         "Sua tarefa é analisar profundamente esse desempenho.\n\n"
         "Para cada resposta incorreta:\n"
         "- Explique por que a resposta correta é a mais adequada, reforçando o conteúdo da explicação.\n"
+        """- Não utilize fragmentos que não se explicam no contexto da explicação, exemplo você respondeu C ou a resposta é B,
+          assim o aluno nao entende, fale o contexto completo, exemplo você respondeu que recife era captal da Bahia, mas Recife é a captao de Pernambuco"""
         "- Aponte onde está o erro de interpretação ou conhecimento do aluno.\n"
         "- Sugira formas de aprender melhor esse conteúdo, como técnicas de estudo, tópicos que o aluno deve revisar, livros, sites confiáveis ou videoaulas.\n\n"
         "Para as respostas corretas:\n"
