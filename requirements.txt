@@ -7,3 +7,5 @@ streamlit
 python-dotenv
 faiss-cpu
 reportlab
+flask
+

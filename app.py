@@ -7,6 +7,7 @@ import random
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import os
+
 from datetime import datetime
 import webbrowser
 from utils.avaliador import analisar_desempenho_ia
@@ -17,6 +18,7 @@ st.set_page_config(
     page_icon="🤖",
     layout="centered"
 )
+
 
 # Adicionando estilo CSS
 st.markdown("""
@@ -288,7 +290,14 @@ def quiz_window(perguntas_raw):
             f.write(html_content)
 
         st.success("✅ Relatório salvo com sucesso!")
-        webbrowser.open(f"file://{os.path.abspath(caminho_html)}")
+        with open(caminho_html, "r", encoding="utf-8") as file:
+            html_string = file.read()
+            st.download_button(
+             label="📄 Baixar Relatório em HTML",
+             data=html_string,
+             file_name=f"relatorio_{data_hora}.html",
+             mime="text/html"
+            )
 
 
     # if st.button("🔁 Refazer Quiz com PDFs", use_container_width=True, key="botao_quiz_refazer"):
