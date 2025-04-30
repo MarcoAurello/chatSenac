@@ -6,3 +6,4 @@ pypdf
 streamlit
 python-dotenv
 faiss-cpu
+reportlab
