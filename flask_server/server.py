@@ -59,7 +59,8 @@ def index():
     </head>
     <body>
         <div class="container">
-            <h2>🔎 Buscar Relatórios por Matrícula</h2>
+            <h2>🔎 Buscar Atividades</h2>
+            <h4> Digite o nome do arquivo ou do aluno</h4>
            <form action="/resultado" method="get">
                 <input type="text" name="matricula" placeholder="Digite a matrícula" required>
                 <button type="submit">Buscar</button>
@@ -133,7 +134,7 @@ def resultado():
             </style>
         </head>
         <body>
-            <h2>Relatórios encontrados para matrícula: {matricula}</h2>
+            <h2>Atividades Encontradas: {matricula}</h2>
             <ul>{links}</ul>
             <a class="back" href="/buscar">Voltar</a>
         </body>

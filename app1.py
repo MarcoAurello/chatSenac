@@ -7,9 +7,14 @@ import random
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import os
+from flask import Flask, send_file
 from datetime import datetime
 import webbrowser
 from utils.avaliador import analisar_desempenho_ia
+
+
+
+
 
 # Configurações de página
 st.set_page_config(
@@ -17,6 +22,7 @@ st.set_page_config(
     page_icon="🤖",
     layout="centered"
 )
+
 
 # Adicionando estilo CSS
 st.markdown("""
@@ -130,25 +136,38 @@ def excluir_arquivo(arquivo):
     except Exception as e:
         st.error(f"❌ Erro ao excluir o arquivo {arquivo.name}: {str(e)}")
 
+
 def quiz_window(perguntas_raw):
     st.markdown("## 🧠 Quiz para testar seu conhecimento")
 
+    # Controle de sessão
+    if "matricula" not in st.session_state:
+        st.session_state["matricula"] = ""
     if "acertos" not in st.session_state:
         st.session_state["acertos"] = 0
     if "respostas_usuario" not in st.session_state:
         st.session_state["respostas_usuario"] = []
 
-    respostas_usuario = st.session_state["respostas_usuario"]  # <- Corrigido
+    # Input de matrícula
+    matricula = st.text_input("Ola aluno, Informe seu nome e pressione ENTER", value=st.session_state["matricula"])
+    st.session_state["matricula"] = matricula
 
+    if not matricula:
+        st.warning("⚠️ Por favor, digite sua matrícula para continuar.")
+        return  # Interrompe a execução até matrícula ser preenchida
+
+    # Processa as perguntas
     perguntas_brutas = perguntas_raw.strip().split("\n\nPergunta:")
     if perguntas_brutas[0].startswith("Pergunta:"):
         perguntas_brutas[0] = perguntas_brutas[0][len("Pergunta:"):]
+
+    respostas_usuario = st.session_state["respostas_usuario"]
 
     for idx, pergunta_raw in enumerate(perguntas_brutas):
         linhas = pergunta_raw.strip().split("\n")
 
         if len(linhas) < 7:
-            st.warning(f"⚠️ Verifique se tem arquivo anexado")
+            st.warning(f"⚠️ Verifique o conteúdo da pergunta {idx+1}. Está incompleto.")
             continue
 
         pergunta_texto = linhas[0]
@@ -157,27 +176,24 @@ def quiz_window(perguntas_raw):
         explicacao = linhas[6].split(":", 1)[-1].strip()
 
         st.markdown(f"**Pergunta {idx + 1}:** {pergunta_texto}")
-        escolha = st.radio("Escolha uma opção:", opcoes, index=None, key=f"resposta_{idx}")
+        chave_radio = f"resposta_{idx}_{pergunta_texto}"
 
-        correta = False
-        letra_escolhida = ""
+        if f"resposta_mostrada_{idx}" in st.session_state and st.session_state[f"resposta_mostrada_{idx}"]:
+            escolha = st.radio("Escolha uma opção:", opcoes, index=None, disabled=True, key=chave_radio)
+        else:
+            escolha = st.radio("Escolha uma opção:", opcoes, index=None, key=chave_radio)
+
         if escolha:
             letra_escolhida = escolha[0].upper()
             correta = (letra_escolhida == resposta_certa)
-        else:
-            letra_escolhida = "Nenhuma"
 
-        if f"resposta_mostrada_{idx}" not in st.session_state:
-            st.session_state[f"resposta_mostrada_{idx}"] = False
+            if not st.session_state.get(f"resposta_mostrada_{idx}", False):
+                st.session_state[f"resposta_mostrada_{idx}"] = True
+                if correta:
+                    st.session_state["acertos"] += 1
 
-        if st.button(f"Enviar Resposta {idx + 1}", key=f"ver_resposta_{idx}"):
-            st.session_state[f"resposta_mostrada_{idx}"] = True
-            if correta:
-                st.session_state["acertos"] += 1
-
-        if st.session_state[f"resposta_mostrada_{idx}"]:
             index_resposta_certa = ord(resposta_certa) - ord("A")
-            texto_resposta = opcoes[index_resposta_certa][3:].strip() if 0 <= index_resposta_certa < len(opcoes) else "opção desconhecida"
+            texto_resposta = opcoes[index_resposta_certa][3:].strip()
 
             if correta:
                 st.success(f"✅ Resposta correta! {resposta_certa}) {texto_resposta}")
@@ -187,120 +203,91 @@ def quiz_window(perguntas_raw):
             st.markdown(f"🧠 **Explicação:** {explicacao}")
             st.markdown("________________________________")
 
-            # Salvar apenas se ainda não foi salvo
-            ja_registrada = any(r["pergunta"] == pergunta_texto for r in respostas_usuario)
-            if not ja_registrada:
+            if not any(r["pergunta"] == pergunta_texto for r in respostas_usuario):
                 respostas_usuario.append({
                     "pergunta": pergunta_texto,
                     "resposta_usuario": letra_escolhida,
+                    "texto_resposta_usuario": escolha,
                     "resposta_correta": resposta_certa,
                     "correta": correta,
                     "explicacao": explicacao
                 })
+                
 
-    st.markdown(f"### 🎯 Total de acertos: {st.session_state['acertos']} de {len(perguntas_brutas)} perguntas.")
+    # Verifica se todas as perguntas foram respondidas
+    if len(respostas_usuario) == len(perguntas_brutas):
+        if st.button("Ao concluir salve o simulado", use_container_width=True):
+            st.info("🔧 Aguarde enquanto geramos o relatório...")
 
+            data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            os.makedirs("relatorioQuiz", exist_ok=True)
+            caminho_html = f"relatorioQuiz/{matricula}_{st.session_state['first_uploaded_file_name']}_relatorio_{data_hora}.html"
 
-    respostas_usuario = st.session_state.get("respostas_usuario", [])
-    todas_preenchidas = all(r.get("resposta_usuario") for r in respostas_usuario)
-    
-# Exibe o botão somente se todas estiverem preenchidas
-    if todas_preenchidas:
-    # Botão para salvar relatório com IA
-     if st.button("Ao concluir salve o simulado", use_container_width=True):
-        import os
-        import webbrowser
-        from datetime import datetime
+            feedback_ia = analisar_desempenho_ia(respostas_usuario)
 
-        os.makedirs("relatorioQuiz", exist_ok=True)
-        data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        caminho_html = f"relatorioQuiz/relatorio_{data_hora}.html"
-
-        respostas_usuario = st.session_state['respostas_usuario']
-        perguntas_brutas = st.session_state.get('perguntas_brutas', [])
-        feedback_ia = analisar_desempenho_ia(respostas_usuario)
-
-        html_content = f"""
-        <!DOCTYPE html>
-        <html lang="pt-BR">
-        <head>
-            <meta charset="UTF-8">
-            <title>Relatório do Quiz - {data_hora}</title>
-            <style>
-                body {{
-                    font-family: 'Segoe UI', sans-serif;
-                    background-color: #f4f6f9;
-                    color: #333;
-                    padding: 30px;
-                    line-height: 1.6;
-                }}
-                h1, h2 {{
-                    color: #2c3e50;
-                }}
-                .card {{
-                    background: #fff;
-                    padding: 20px;
-                    margin-bottom: 20px;
-                    border-radius: 10px;
-                    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-                }}
-                .separador {{
-                    border-top: 1px solid #ccc;
-                    margin: 20px 0;
-                }}
-                .correta {{ color: green; }}
-                .incorreta {{ color: red; }}
-            </style>
-        </head>
-        <body>
-            <h1>📊 Relatório do Quiz - {data_hora}</h1>
-            <div class="card">
-                <p><strong>✅ Acertos:</strong> {st.session_state['acertos']}</p>
-            </div>
-
-            <div class="card">
-                <h2>🧠 Análise do Desempenho (IA)</h2>
-                <p>{feedback_ia}</p>
-            </div>
-
-            <h2>📋 Respostas do Quiz</h2>
-        """
-
-        for i, r in enumerate(respostas_usuario):
-            html_content += f"""
-            <div class="card">
-                <p><strong>Pergunta {i+1}:</strong> {r['pergunta']}</p>
-                <p><strong>Sua resposta:</strong> {r['resposta_usuario']}</p>
-                <p><strong>Resposta correta:</strong> {r['resposta_correta']}</p>
-                <p><strong>Resultado:</strong> <span class="{ 'correta' if r['correta'] else 'incorreta' }">
-                    {"Correta" if r['correta'] else 'Incorreta'}
-                </span></p>
-                <p><strong>Explicação:</strong> {r['explicacao']}</p>
-            </div>
+            html_content = f"""
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+                <meta charset="UTF-8">
+                <title>Relatório do Quiz - {data_hora}</title>
+                <style>
+                    body {{
+                        font-family: 'Segoe UI', sans-serif;
+                        background-color: #f4f6f9;
+                        color: #333;
+                        padding: 30px;
+                        line-height: 1.6;
+                    }}
+                    h1, h2 {{ color: #2c3e50; }}
+                    .card {{
+                        background: #fff;
+                        padding: 20px;
+                        margin-bottom: 20px;
+                        border-radius: 10px;
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+                    }}
+                    .correta {{ color: green; }}
+                    .incorreta {{ color: red; }}
+                </style>
+            </head>
+            <body>
+                <h1>📊 Relatório do Quiz - {data_hora}</h1>
+                <div class="card">
+                <p><strong>✅ Matricula:</strong> {st.session_state['matricula']}</p>
+                    <p><strong>✅ Acertos:</strong> {st.session_state['acertos']}</p>
+                </div>
+                <div class="card">
+                    <h2>🧠 Análise do Desempenho (IA)</h2>
+                    {''.join(f'<p>{par}</p>' for par in feedback_ia.split('\\n\\n'))}
+                </div>
             """
 
-        html_content += """
-        </body>
-        </html>
-        """
+            for i, r in enumerate(respostas_usuario):
+                html_content += f"""
+                <div class="card">
+                    <p><strong>Pergunta {i+1}:</strong> {r['pergunta']}</p>
+                    <p><strong>Sua resposta:</strong> {r['resposta_usuario']}) {r.get('texto_resposta_usuario', '')}</p>
+                    <p><strong>Resposta correta:</strong> {r['resposta_correta']}</p>
+                    <p><strong>Resultado:</strong> <span class="{ 'correta' if r['correta'] else 'incorreta' }">
+                        {"Correta" if r['correta'] else 'Incorreta'}
+                    </span></p>
+                    <p><strong>Explicação:</strong> {r['explicacao']}</p>
+                </div>
+                """
 
-        with open(caminho_html, "w", encoding="utf-8") as f:
-            f.write(html_content)
+            html_content += "</body></html>"
 
-        st.success("✅ Relatório salvo com sucesso!")
-        webbrowser.open(f"file://{os.path.abspath(caminho_html)}")
+            with open(caminho_html, "w", encoding="utf-8") as f:
+                f.write(html_content)
 
-
-    # if st.button("🔁 Refazer Quiz com PDFs", use_container_width=True, key="botao_quiz_refazer"):
-    #     st.session_state.pop("quiz", None)
-    #     st.session_state.pop("respostas_usuario", None)
-    #     st.session_state["acertos"] = 0
-    #     from backend import importar_documentos, dividir_documentos, gerar_perguntas_quiz
-    #     documentos = importar_documentos()
-    #     documentos = dividir_documentos(documentos)
-    #     st.session_state["quiz"] = gerar_perguntas_quiz(documentos)
-    #     st.rerun()
-
+            st.success("✅ Relatório salvo com sucesso!")
+            st.markdown(
+                f'<a href="http://127.0.0.1:5000/relatorio/{matricula}_{st.session_state['first_uploaded_file_name']}_relatorio_{data_hora}.html" target="_blank">'
+                f'<button style="width:100%;padding:10px;font-size:16px;background-color:#4CAF50;color:white;border:none;border-radius:5px;">'
+                f'📖 Veja o relatório</button></a>',
+                unsafe_allow_html=True
+            )
 def save_uploaded_files(uploaded_files, folder):
     # Apaga arquivos antigos da sessão
     for file in folder.glob(f"*_{st.session_state['session_id']}.pdf"):
@@ -343,7 +330,7 @@ def main():
 """, unsafe_allow_html=True)
 
         st.markdown("### 📄Envie PDfs de livros, aulas ou documentos")
-        st.markdown("Arraste e solte os arquivos aqui ou clique para selecionar manualmente.")
+        
 
         uploaded_pdfs = st.file_uploader(
         label="",
@@ -352,11 +339,23 @@ def main():
         label_visibility="collapsed",
         help="Você pode adicionar vários arquivos ao mesmo tempo."
     )
+        
 
         if uploaded_pdfs:
             save_uploaded_files(uploaded_pdfs, folder_files)
             st.success(f"✅ {len(uploaded_pdfs)} arquivo(s) salvo(s) com sucesso!")
-
+            
+            
+            
+            
+            
+            st.session_state['first_uploaded_file_name'] =uploaded_pdfs[0].name
+            
+    
+            
+           
+            
+            
         # Mostrar arquivos existentes (retorna uma lista de arquivos)
         session_id = st.session_state.get("session_id", "")
         arquivos_existentes = list(folder_files.glob(f"*_{session_id}.pdf"))
@@ -364,17 +363,22 @@ def main():
 
         # Só mostra os botões se houver pelo menos 1 PDF
         if len(arquivos_existentes) > 0:
-            label_botao = "▶️ Inicializar Chatbot" if "chain" not in st.session_state else "🔄 Atualizar Chatbot"
-            with st.container():
-                st.markdown('<div class="bot-container">', unsafe_allow_html=True)
+           # arq = st.text_input(arquivos_existentes[1].name)
+           
+            # label_botao = "▶️ Inicializar Chatbot com a matétia" if "chain" not in st.session_state else "🔄 Atualizar Chatbot"
+            # with st.container():
+            #     st.markdown('<div class="bot-container">', unsafe_allow_html=True)
 
-                if st.button(label_botao, use_container_width=True, key="botao_inicializar"):
-                    st.info("🔧 Inicializando o Chatbot...")
-                    cria_chain_conversa()
-                    st.session_state.pop("quiz", None)
-                    st.rerun()
+            #     if st.button(label_botao, use_container_width=True, key="botao_inicializar"):
+                    
+            #         st.info("🔧 Inicializando o Chatbot...")
+            #         cria_chain_conversa()
+            #         st.session_state.pop("quiz", None)
+            #         st.rerun()
 
-                if st.button("🧪 Gerar quiz para testar seu conhecimento", use_container_width=True, key="botao_quiz"):
+                if st.button("🧪 Gerar perguntas sobre a matéria", use_container_width=True, key="botao_quiz"):
+                    
+                    st.info("🔧 gerando perguntas...")
                     from backend import importar_documentos, dividir_documentos, gerar_perguntas_quiz
                     documentos = importar_documentos()
                     documentos = dividir_documentos(documentos)

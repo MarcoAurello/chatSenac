@@ -149,7 +149,7 @@ def quiz_window(perguntas_raw):
         st.session_state["respostas_usuario"] = []
 
     # Input de matrícula
-    matricula = st.text_input("Digite sua matrícula para iniciar o quiz", value=st.session_state["matricula"])
+    matricula = st.text_input("Ola aluno, Informe seu nome e pressione ENTER", value=st.session_state["matricula"])
     st.session_state["matricula"] = matricula
 
     if not matricula:
@@ -221,7 +221,7 @@ def quiz_window(perguntas_raw):
 
             data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             os.makedirs("relatorioQuiz", exist_ok=True)
-            caminho_html = f"relatorioQuiz/{matricula}_{first_uploaded_file_name}_relatorio_{data_hora}.html"
+            caminho_html = f"relatorioQuiz/{matricula}_{st.session_state['first_uploaded_file_name']}_relatorio_{data_hora}.html"
 
             feedback_ia = analisar_desempenho_ia(respostas_usuario)
 
@@ -283,7 +283,7 @@ def quiz_window(perguntas_raw):
 
             st.success("✅ Relatório salvo com sucesso!")
             st.markdown(
-                f'<a href="http://127.0.0.1:5000/relatorio/{matricula}_{first_uploaded_file_name}_relatorio_{data_hora}.html" target="_blank">'
+                f'<a href="http://127.0.0.1:5000/relatorio/{matricula}_{st.session_state['first_uploaded_file_name']}_relatorio_{data_hora}.html" target="_blank">'
                 f'<button style="width:100%;padding:10px;font-size:16px;background-color:#4CAF50;color:white;border:none;border-radius:5px;">'
                 f'📖 Veja o relatório</button></a>',
                 unsafe_allow_html=True
@@ -364,16 +364,17 @@ def main():
         # Só mostra os botões se houver pelo menos 1 PDF
         if len(arquivos_existentes) > 0:
            # arq = st.text_input(arquivos_existentes[1].name)
-            label_botao = "▶️ Inicializar Chatbot com a matétia" if "chain" not in st.session_state else "🔄 Atualizar Chatbot"
-            with st.container():
-                st.markdown('<div class="bot-container">', unsafe_allow_html=True)
+           
+            # label_botao = "▶️ Inicializar Chatbot com a matétia" if "chain" not in st.session_state else "🔄 Atualizar Chatbot"
+            # with st.container():
+            #     st.markdown('<div class="bot-container">', unsafe_allow_html=True)
 
-                if st.button(label_botao, use_container_width=True, key="botao_inicializar"):
+            #     if st.button(label_botao, use_container_width=True, key="botao_inicializar"):
                     
-                    st.info("🔧 Inicializando o Chatbot...")
-                    cria_chain_conversa()
-                    st.session_state.pop("quiz", None)
-                    st.rerun()
+            #         st.info("🔧 Inicializando o Chatbot...")
+            #         cria_chain_conversa()
+            #         st.session_state.pop("quiz", None)
+            #         st.rerun()
 
                 if st.button("🧪 Gerar perguntas sobre a matéria", use_container_width=True, key="botao_quiz"):
                     
